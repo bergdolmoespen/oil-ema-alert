@@ -2,7 +2,7 @@ name: Oil EMA Alert
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/2 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -20,20 +20,16 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
 
       - name: Install dependencies
         run: pip install yfinance requests
 
-      - name: Run EMA alert (every 2 min x3)
+      - name: Run EMA alert
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          python oil_ema_alert.py
-          sleep 120
-          python oil_ema_alert.py
-          sleep 120
-          python oil_ema_alert.py
+        run: python oil_ema_alert.py
 
       - name: Save state
         run: |
