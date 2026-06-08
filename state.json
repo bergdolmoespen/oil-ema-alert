@@ -1,5 +1,11 @@
 {
-  "5m":  {"last_cross": null, "last_cross_time": null},
-  "15m": {"last_cross": null, "last_cross_time": null},
+  "5m": {
+    "last_cross": null,
+    "last_cross_time": null
+  },
+  "15m": {
+    "last_cross": null,
+    "last_cross_time": null
+  },
   "confirmed_time": null
 }
