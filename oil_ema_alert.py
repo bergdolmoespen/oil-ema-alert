@@ -10,7 +10,7 @@ State is stored in state.json and committed back to the repo.
 import json
 import os
 import sys
-from datetime import timezone, timedelta
+from zoneinfo import ZoneInfo
 import requests
 import yfinance as yf
 
@@ -18,12 +18,16 @@ TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 SYMBOL = "CL=F"
 STATE_FILE = "state.json"
-OSLO = timezone(timedelta(hours=2))
+OSLO = ZoneInfo("Europe/Oslo")
 
 
 def send_telegram(message: str) -> None:
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": message}, timeout=10)
+    try:
+        r = requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": message}, timeout=10)
+        print(f"Telegram response: {r.status_code}")
+    except Exception as e:
+        print(f"Telegram error: {e}", file=sys.stderr)
 
 
 def load_state() -> dict:
@@ -31,7 +35,7 @@ def load_state() -> dict:
         with open(STATE_FILE) as f:
             return json.load(f)
     return {
-        "5m": {"last_cross": None, "last_cross_time": None},
+        "5m":  {"last_cross": None, "last_cross_time": None},
         "15m": {"last_cross": None, "last_cross_time": None},
         "confirmed_time": None,
     }
@@ -39,7 +43,7 @@ def load_state() -> dict:
 
 def save_state(state: dict) -> None:
     with open(STATE_FILE, "w") as f:
-        json.dump(state, f)
+        json.dump(state, f, indent=2)
 
 
 def to_oslo(ts) -> str:
@@ -51,12 +55,22 @@ def to_oslo(ts) -> str:
 
 def get_ema_data(interval: str):
     period = "5d" if interval == "15m" else "3d"
-    df = yf.download(SYMBOL, period=period, interval=interval, progress=False, auto_adjust=True)
+    df = yf.download(
+        SYMBOL, period=period, interval=interval,
+        progress=False, auto_adjust=True, multi_level_index=False
+    )
     if df.empty or len(df) < 30:
+        print(f"Not enough {interval} data: {len(df)} rows", file=sys.stderr)
         return None
-    close = df["Close"].squeeze()
+
+    close = df["Close"]
+    if hasattr(close, "squeeze"):
+        close = close.squeeze()
+
     ema9  = close.ewm(span=9,  adjust=False).mean()
     ema21 = close.ewm(span=21, adjust=False).mean()
+
+    # -1 = in-progress candle (skip), -2 = last closed, -3 = previous closed
     return {
         "prev_9":   float(ema9.iloc[-3]),
         "prev_21":  float(ema21.iloc[-3]),
@@ -81,16 +95,22 @@ def current_direction(data: dict) -> str:
 
 
 def main():
+    print(f"Fetching data for {SYMBOL}...")
     data_5m  = get_ema_data("5m")
     data_15m = get_ema_data("15m")
 
     if not data_5m or not data_15m:
-        print("Not enough data.", file=sys.stderr)
+        print("Exiting: insufficient data.", file=sys.stderr)
         sys.exit(1)
+
+    print(f"5m:  price={data_5m['price']:.2f}  EMA9={data_5m['curr_9']:.3f}  EMA21={data_5m['curr_21']:.3f}  time={data_5m['time_fmt']}")
+    print(f"15m: price={data_15m['price']:.2f}  EMA9={data_15m['curr_9']:.3f}  EMA21={data_15m['curr_21']:.3f}  time={data_15m['time_fmt']}")
 
     state     = load_state()
     cross_5m  = detect_cross(data_5m)
     cross_15m = detect_cross(data_15m)
+
+    print(f"Cross detected — 5m: {cross_5m}  |  15m: {cross_15m}")
 
     # 5m alert
     if cross_5m and state["5m"]["last_cross_time"] != data_5m["time"]:
@@ -138,14 +158,8 @@ def main():
         print(f"Sent CONFIRMED {dir_5m} alert")
         state["confirmed_time"] = confirm_key
 
-    if not fresh_cross:
-        print(
-            f"No cross. "
-            f"5m diff={data_5m['curr_9'] - data_5m['curr_21']:.3f} | "
-            f"15m diff={data_15m['curr_9'] - data_15m['curr_21']:.3f}"
-        )
-
     save_state(state)
+    print("Done.")
 
 
 if __name__ == "__main__":
