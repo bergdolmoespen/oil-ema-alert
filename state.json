@@ -1,11 +1,11 @@
 {
   "5m": {
     "last_cross": "bearish",
-    "last_cross_time": "2026-07-13 09:15:00-04:00"
+    "last_cross_time": "2026-07-15 13:40:00-04:00"
   },
   "15m": {
     "last_cross": "bearish",
     "last_cross_time": "2026-07-15 07:15:00-04:00"
   },
-  "confirmed_time": "bearish_2026-07-15 07:35:00-04:00_2026-07-15 07:15:00-04:00"
+  "confirmed_time": "bearish_2026-07-15 13:40:00-04:00_2026-07-15 13:30:00-04:00"
 }
